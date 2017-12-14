@@ -1,17 +1,18 @@
 ﻿using Microsoft.Extensions.Configuration;
+using Rainbow.ServiceConfiguration.Zookeeper;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Rainbow.ServiceConfiguration.Zookeeper
+namespace Microsoft.Extensions.Configuration
 {
     public static class ZookeeperConfigurationExtensions
     {
 
-        public static IConfigurationBuilder AddAzureKeyVault(
+        public static IConfigurationBuilder AddZookeeper(
             this IConfigurationBuilder configurationBuilder,
             string connection,
-            string path)
+            string serviceName)
         {
             if (configurationBuilder == null)
             {
@@ -21,15 +22,15 @@ namespace Rainbow.ServiceConfiguration.Zookeeper
             {
                 throw new ArgumentNullException(nameof(connection));
             }
-            if (path == null)
+            if (serviceName == null)
             {
-                throw new ArgumentNullException(nameof(path));
+                throw new ArgumentNullException(nameof(serviceName));
             }
 
             configurationBuilder.Add(new ZookeeperConfigurationSource()
             {
                 Connection = connection,
-                Path = path
+                ServiceName = serviceName
             });
 
             return configurationBuilder;

@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using static org.apache.zookeeper.ZooDefs;
 
 namespace Rainbow.ServiceConfiguration.Zookeeper
 {
@@ -13,7 +14,7 @@ namespace Rainbow.ServiceConfiguration.Zookeeper
     {
         private ZooKeeper _zkClient;
         private ZookeeperConfigurationSource _source;
-        private SortedDictionary<string, string> _cache = new SortedDictionary<string, string>();
+        private SortedDictionary<string, IDictionary<string, string>> _cache = new SortedDictionary<string, IDictionary<string, string>>();
 
         public ZookeeperConfigurationProvider(ZookeeperConfigurationSource source)
         {
@@ -25,27 +26,59 @@ namespace Rainbow.ServiceConfiguration.Zookeeper
 
         private async Task LoadAsync()
         {
-            var cache = new SortedDictionary<string, string>();
-            var node = await this._zkClient.getChildrenAsync(_source.Path, true);
+            var cache = new SortedDictionary<string, IDictionary<string, string>>();
+            var path = $"/{ZookeeperDefaults.ConfigPath}/{_source.ServiceName}";
 
-            foreach (var item in node.Children)
+            try
             {
-                var data = await this._zkClient.getDataAsync($"{_source.Path}/{item}", true);
+                var node = await this._zkClient.getChildrenAsync(path, true);
 
-                var input = new MemoryStream(data.Data);
-                var kValue = _source.Parser.Parse(input);
+                foreach (var item in node.Children)
+                {
+                    await this.AddItem(cache, $"{path}/{item}");
+                }
+                _cache = cache;
+            }
+            catch (KeeperException.NoNodeException noex)
+            {
+                CreateNode($"/{ZookeeperDefaults.ConfigPath}");
+                CreateNode(path);
+                await LoadAsync();
+            }
+            catch (Exception ex)
+            {
+                throw ex;
+            }
+        }
 
-                AddRange(cache, kValue);
+        private void CreateNode(string node)
+        {
+            if (this._zkClient.existsAsync(node).GetAwaiter().GetResult() == null)
+            {
+                this._zkClient.createAsync(node, null, Ids.OPEN_ACL_UNSAFE, CreateMode.PERSISTENT).GetAwaiter().GetResult();
             }
         }
 
 
-        private void AddRange(IDictionary<string, string> cache, IDictionary<string, string> data)
+
+
+        private async Task AddItem(SortedDictionary<string, IDictionary<string, string>> cache, string path)
         {
-            foreach(var item in data)
+            var data = await this._zkClient.getDataAsync(path, true);
+
+            var input = new MemoryStream(data.Data);
+            var parser = new JsonConfigurationFileParser();
+            var kValue = parser.Parse(input);
+
+            if (cache.ContainsKey(path))
             {
-                cache.Add(item.Key, item.Value);
+                cache[path] = kValue;
             }
+            else
+            {
+                cache.Add(path, kValue);
+            }
+
         }
 
 
